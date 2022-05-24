@@ -1,1 +1,3 @@
-![Architecture](/docs/near-event-streams.png?raw=true)
+## Architecture
+
+![Architecture](/docs/architecture.png?raw=true)
