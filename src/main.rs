@@ -1,50 +1,56 @@
-fn main() {
-    let args: Vec<String> = std::env::args().collect();
-    let home_dir = near_indexer::get_default_home();
+use clap::Parser;
+use configs::{Opts, SubCommand};
+use near_indexer::{
+    get_default_home, indexer_init_configs, AwaitForNodeSyncedEnum, Indexer, IndexerConfig,
+    SyncModeEnum,
+};
+use near_o11y::{default_subscriber, tracing_subscriber::EnvFilter};
+use openssl_probe::init_ssl_cert_env_vars;
 
-    let command = args
-        .get(1)
-        .map(|arg| arg.as_str())
-        .expect("You need to provide a command: `init` or `run` as arg");
+mod configs;
 
-    match command {
-        "init" => {
-            let config_args = near_indexer::InitConfigArgs {
-                chain_id: Some("localnet".to_string()),
-                account_id: None,
-                test_seed: None,
-                num_shards: 1,
-                fast: false,
-                genesis: None,
-                download_genesis: false,
-                download_genesis_url: None,
-                download_config: false,
-                download_config_url: None,
-                max_gas_burnt_view: None,
-                boot_nodes: None,
+fn main() -> anyhow::Result<()> {
+    // We use it to automatically search the for root certificates to perform HTTPS calls
+    // (sending telemetry and downloading genesis)
+    init_ssl_cert_env_vars();
+    let env_filter = EnvFilter::new(
+        "nearcore=info,indexer_example=info,tokio_reactor=info,near=info,\
+         stats=info,telemetry=info,indexer=info,near-performance-metrics=info",
+    );
+    let runtime = tokio::runtime::Runtime::new()?;
+    let _subscriber = runtime.block_on(async {
+        default_subscriber(env_filter, &Default::default())
+            .await
+            .global();
+    });
+
+    let opts: Opts = Opts::parse();
+
+    let home_dir = opts.home_dir.unwrap_or_else(get_default_home);
+
+    match opts.subcmd {
+        SubCommand::Run => {
+            let indexer_config = IndexerConfig {
+                home_dir,
+                sync_mode: SyncModeEnum::FromInterruption,
+                await_for_node_synced: AwaitForNodeSyncedEnum::WaitForFullSync,
             };
-            near_indexer::indexer_init_configs(&home_dir, config_args).unwrap();
-        }
-        "run" => {
-            let indexer_config = near_indexer::IndexerConfig {
-                home_dir: near_indexer::get_default_home(),
-                sync_mode: near_indexer::SyncModeEnum::FromInterruption,
-                await_for_node_synced: near_indexer::AwaitForNodeSyncedEnum::WaitForFullSync,
-            };
-            let sys = actix::System::new();
-            sys.block_on(async move {
-                let indexer = near_indexer::Indexer::new(indexer_config).unwrap();
+            let system = actix::System::new();
+            system.block_on(async move {
+                let indexer = Indexer::new(indexer_config).expect("Indexer::new()");
                 let stream = indexer.streamer();
                 actix::spawn(listen_blocks(stream));
             });
-            sys.run().unwrap();
+            system.run()?;
         }
-        _ => panic!("You have to pass `init` or `run` arg"),
+        SubCommand::Init(config) => indexer_init_configs(&home_dir, config.into())?,
     }
+
+    Ok(())
 }
 
 async fn listen_blocks(mut stream: tokio::sync::mpsc::Receiver<near_indexer::StreamerMessage>) {
     while let Some(streamer_message) = stream.recv().await {
-        eprintln!("{}", serde_json::to_value(streamer_message).unwrap());
+        eprintln!("{:#?}", serde_json::to_value(streamer_message).unwrap());
     }
 }
