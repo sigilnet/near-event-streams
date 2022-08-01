@@ -5,8 +5,8 @@ authors = ["Sigil Network <contact@sigilnet.com>"]
 edition = "2021"
 
 [dependencies]
-near-indexer = { git = "https://github.com/near/nearcore.git", rev = "d44ae4d6369abc8fe523492ff0911367a6e931af" }
-near-o11y = { git = "https://github.com/near/nearcore.git", rev = "d44ae4d6369abc8fe523492ff0911367a6e931af" }
+near-indexer = { git = "https://github.com/near/nearcore.git", rev = "5228fb10617e9e07ddf1acafe039722534168305" }
+near-o11y = { git = "https://github.com/near/nearcore.git", rev = "5228fb10617e9e07ddf1acafe039722534168305" }
 actix = "0.13.0"
 enum-map = "=2.1.0"
 openssl-probe = "0.1.5"
