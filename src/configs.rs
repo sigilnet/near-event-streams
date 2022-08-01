@@ -8,6 +8,9 @@ pub(crate) struct Opts {
     /// Sets a custom config dir. Defaults to ~/.near/
     #[clap(short, long)]
     pub home_dir: Option<std::path::PathBuf>,
+    /// Enabled Indexer debug level of logs
+    #[clap(long)]
+    pub debug: bool,
     #[clap(subcommand)]
     pub subcmd: SubCommand,
 }
@@ -15,7 +18,7 @@ pub(crate) struct Opts {
 #[derive(Parser, Debug)]
 pub(crate) enum SubCommand {
     /// Run NEAR Indexer Example. Start observe the network
-    Run,
+    Run(RunArgs),
     /// Initialize necessary configs
     Init(InitConfigArgs),
 }
@@ -57,6 +60,61 @@ pub(crate) struct InitConfigArgs {
     /// Specify a custom max_gas_burnt_view limit.
     #[clap(long)]
     pub max_gas_burnt_view: Option<Gas>,
+}
+
+#[derive(Parser, Debug, Clone)]
+pub(crate) struct RunArgs {
+    /// Force streaming while node is syncing
+    #[clap(long)]
+    pub stream_while_syncing: bool,
+    /// Sets the starting point for indexing
+    #[clap(subcommand)]
+    pub sync_mode: SyncModeSubCommand,
+}
+
+impl RunArgs {
+    pub(crate) fn to_indexer_config(
+        &self,
+        home_dir: std::path::PathBuf,
+    ) -> near_indexer::IndexerConfig {
+        near_indexer::IndexerConfig {
+            home_dir,
+            sync_mode: self.sync_mode.clone().into(),
+            await_for_node_synced: if self.stream_while_syncing {
+                near_indexer::AwaitForNodeSyncedEnum::StreamWhileSyncing
+            } else {
+                near_indexer::AwaitForNodeSyncedEnum::WaitForFullSync
+            },
+        }
+    }
+}
+
+#[allow(clippy::enum_variant_names)] // we want commands to be more explicit
+#[derive(Parser, Debug, Clone)]
+pub(crate) enum SyncModeSubCommand {
+    /// continue from the block Indexer was interrupted
+    SyncFromInterruption,
+    /// start from the newest block after node finishes syncing
+    SyncFromLatest,
+    /// start from specified block height
+    SyncFromBlock(BlockArgs),
+}
+
+#[derive(Parser, Debug, Clone)]
+pub(crate) struct BlockArgs {
+    /// block height for block sync mode
+    #[clap(long)]
+    pub height: u64,
+}
+
+impl From<SyncModeSubCommand> for near_indexer::SyncModeEnum {
+    fn from(sync_mode: SyncModeSubCommand) -> Self {
+        match sync_mode {
+            SyncModeSubCommand::SyncFromInterruption => Self::FromInterruption,
+            SyncModeSubCommand::SyncFromLatest => Self::LatestSynced,
+            SyncModeSubCommand::SyncFromBlock(args) => Self::BlockHeight(args.height),
+        }
+    }
 }
 
 impl From<InitConfigArgs> for near_indexer::InitConfigArgs {

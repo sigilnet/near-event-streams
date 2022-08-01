@@ -1,15 +1,9 @@
 use clap::Parser;
 use configs::{Opts, SubCommand};
-use near_indexer::{
-    get_default_home, indexer_init_configs, AwaitForNodeSyncedEnum, Indexer, IndexerConfig,
-    SyncModeEnum,
-};
-use near_o11y::{
-    default_subscriber,
-    tracing::{info, warn},
-    tracing_subscriber::EnvFilter,
-};
+use near_indexer::{get_default_home, indexer_init_configs, Indexer};
 use openssl_probe::init_ssl_cert_env_vars;
+use tracing::{debug, info, warn};
+use tracing_subscriber::EnvFilter;
 
 mod configs;
 mod event_types;
@@ -20,28 +14,16 @@ fn main() -> anyhow::Result<()> {
     // We use it to automatically search the for root certificates to perform HTTPS calls
     // (sending telemetry and downloading genesis)
     init_ssl_cert_env_vars();
-    let env_filter = EnvFilter::new(
-        "nearcore=info,indexer_example=info,tokio_reactor=info,near=info,\
-         stats=info,telemetry=info,indexer=info,near-performance-metrics=info",
-    );
-    let runtime = tokio::runtime::Runtime::new()?;
-    let _subscriber = runtime.block_on(async {
-        default_subscriber(env_filter, &Default::default())
-            .await
-            .global();
-    });
 
     let opts: Opts = Opts::parse();
+
+    init_tracer(&opts);
 
     let home_dir = opts.home_dir.unwrap_or_else(get_default_home);
 
     match opts.subcmd {
-        SubCommand::Run => {
-            let indexer_config = IndexerConfig {
-                home_dir,
-                sync_mode: SyncModeEnum::FromInterruption,
-                await_for_node_synced: AwaitForNodeSyncedEnum::WaitForFullSync,
-            };
+        SubCommand::Run(args) => {
+            let indexer_config = args.to_indexer_config(home_dir);
             let system = actix::System::new();
             system.block_on(async move {
                 let indexer = Indexer::new(indexer_config).expect("Indexer::new()");
@@ -56,6 +38,45 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
+fn init_tracer(opts: &Opts) {
+    let mut env_filter = EnvFilter::new(
+        "tokio_reactor=info,near=info,stats=info,telemetry=info,indexer=info,aggregated=info",
+    );
+
+    if opts.debug {
+        env_filter = env_filter.add_directive(
+            format!("{}=debug", INDEXER)
+                .parse()
+                .expect("Failed to parse directive"),
+        );
+    } else {
+        env_filter = env_filter.add_directive(
+            format!("{}=info", INDEXER)
+                .parse()
+                .expect("Failed to parse directive"),
+        );
+    };
+
+    if let Ok(rust_log) = std::env::var("RUST_LOG") {
+        if !rust_log.is_empty() {
+            for directive in rust_log.split(',').filter_map(|s| match s.parse() {
+                Ok(directive) => Some(directive),
+                Err(err) => {
+                    eprintln!("Ignoring directive `{}`: {}", s, err);
+                    None
+                }
+            }) {
+                env_filter = env_filter.add_directive(directive);
+            }
+        }
+    }
+
+    tracing_subscriber::fmt::Subscriber::builder()
+        .with_env_filter(env_filter)
+        .with_writer(std::io::stderr)
+        .init();
+}
+
 async fn listen_blocks(
     mut stream: tokio::sync::mpsc::Receiver<near_indexer::StreamerMessage>,
 ) -> anyhow::Result<()> {
@@ -67,6 +88,11 @@ async fn listen_blocks(
 }
 
 fn store_events(streamer_message: &near_indexer::StreamerMessage) -> anyhow::Result<()> {
+    debug!(
+        target: INDEXER,
+        "Block height {}", &streamer_message.block.header.height
+    );
+
     streamer_message.shards.iter().for_each(|shard| {
         for outcome in &shard.receipt_execution_outcomes {
             let events = extract_events(outcome);

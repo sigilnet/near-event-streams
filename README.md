@@ -10,9 +10,14 @@
 
 ### Init config
 
-`cargo run -- --home-dir ~/.near/localnet init`
+`export LOCALNET_NEAR_PATH=<YOUR_LOCALNEAR_DIR>`
+`export LOCALNET_NODE_PUBKEY=<YOUR_LOCALNEAR_NODE_PUBKEY>`
 
-Configs for the specified network are in the --home-dir provided folder. We need to ensure that NEAR Indexer follows all the necessary shards, so "tracked_shards" parameters in ~/.near/localnet/config.json needs to be configured properly. For example, with a single shared network, you just add the shard #0 to the list:
+`cargo run -- --home-dir ./.near/localnet init --chain-id localnet $LOCALNET_NODE_PUBKEY@0.0.0.0:34567`
+
+`cp $LOCALNET_NEAR_PATH/.near-indexer/localnet/genesis.json ./.near/localnet/genesis.json`
+
+Configs for the specified network are in the --home-dir provided folder. We need to ensure that NEAR Indexer follows all the necessary shards, so "tracked_shards" parameters in ./.near/localnet/config.json needs to be configured properly. For example, with a single shared network, you just add the shard #0 to the list:
 
 ```
 ...
@@ -21,4 +26,7 @@ Configs for the specified network are in the --home-dir provided folder. We need
 ```
 
 ### Run localnet
-`cargo run -- --home-dir ~/.near/localnet run`
+`cargo run -- --home-dir ./.near/localnet --debug run --stream-while-syncing sync-from-interruption`
+
+## Start testnet
+`cargo run -- --home-dir ./.near/testnet init --chain-id testnet --download-config --download-genesis`
