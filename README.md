@@ -11,7 +11,8 @@
 ### Init config
 
 `export LOCALNET_NEAR_PATH=<YOUR_LOCALNEAR_DIR>`
-`export LOCALNET_NODE_PUBKEY=<YOUR_LOCALNEAR_NODE_PUBKEY>`
+
+`export LOCALNET_NODE_PUBKEY=$(cat $LOCALNET_NEAR_PATH/.near-indexer/localnet/node_key.json | jq -r ".public_key")`
 
 `cargo run -- --home-dir ./.near/localnet init --chain-id localnet $LOCALNET_NODE_PUBKEY@0.0.0.0:34567`
 
@@ -23,10 +24,20 @@ Configs for the specified network are in the --home-dir provided folder. We need
 ...
 "tracked_shards": [0],
 ...
+"consensus": {
+  "min_num_peers": 1,
+  ...
+}
+...
 ```
 
-### Run localnet
-`cargo run -- --home-dir ./.near/localnet --debug run --stream-while-syncing sync-from-interruption`
+### Run
+`cargo run -r -- --home-dir ./.near/localnet --debug run --stream-while-syncing sync-from-interruption`
 
 ## Start testnet
-`cargo run -- --home-dir ./.near/testnet init --chain-id testnet --download-config --download-genesis`
+
+### Init config
+`cargo run -r -- --home-dir ./.near/testnet init --chain-id testnet --download-config --download-genesis`
+
+### Run
+`cargo run -r -- --home-dir ./.near/testnet --debug run --stream-while-syncing sync-from-interruption`

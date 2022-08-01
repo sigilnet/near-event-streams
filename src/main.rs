@@ -40,7 +40,7 @@ fn main() -> anyhow::Result<()> {
 
 fn init_tracer(opts: &Opts) {
     let mut env_filter = EnvFilter::new(
-        "tokio_reactor=info,near=info,stats=info,telemetry=info,indexer=info,aggregated=info",
+        "tokio_reactor=info,near=info,stats=info,telemetry=info,indexer=info,aggregated=info,near_chain::doomslug=warn",
     );
 
     if opts.debug {
