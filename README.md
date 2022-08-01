@@ -14,13 +14,17 @@
 
 `export LOCALNET_NODE_PUBKEY=$(cat $LOCALNET_NEAR_PATH/.near-indexer/localnet/node_key.json | jq -r ".public_key")`
 
-`cargo run -- --home-dir ./.near/localnet init --chain-id localnet $LOCALNET_NODE_PUBKEY@0.0.0.0:34567`
+`cargo run -r -- --home-dir ./.near/localnet init --chain-id localnet $LOCALNET_NODE_PUBKEY@0.0.0.0:34567`
 
 `cp $LOCALNET_NEAR_PATH/.near-indexer/localnet/genesis.json ./.near/localnet/genesis.json`
+
+`rm ./.near/localnet/validator_key.json`
 
 Configs for the specified network are in the --home-dir provided folder. We need to ensure that NEAR Indexer follows all the necessary shards, so "tracked_shards" parameters in ./.near/localnet/config.json needs to be configured properly. For example, with a single shared network, you just add the shard #0 to the list:
 
 ```
+vi ./.near/localnet/config.json
+
 ...
 "tracked_shards": [0],
 ...
