@@ -45,3 +45,19 @@ vi ./.near/localnet/config.json
 
 ### Run
 `cargo run -r -- --home-dir ./.near/testnet --debug run --stream-while-syncing sync-from-interruption`
+
+## Cross-compile linux binary from macos
+
+<https://github.com/messense/homebrew-macos-cross-toolchains>
+
+`brew tap messense/macos-cross-toolchains`
+
+`brew install x86_64-unknown-linux-gnu`
+
+```
+export CC_x86_64_unknown_linux_gnu=x86_64-unknown-linux-gnu-gcc
+export CXX_x86_64_unknown_linux_gnu=x86_64-unknown-linux-gnu-g++
+export AR_x86_64_unknown_linux_gnu=x86_64-unknown-linux-gnu-ar
+```
+
+`cargo build-linux`
