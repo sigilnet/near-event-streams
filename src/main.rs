@@ -4,10 +4,17 @@ use near_indexer::{
     get_default_home, indexer_init_configs, AwaitForNodeSyncedEnum, Indexer, IndexerConfig,
     SyncModeEnum,
 };
-use near_o11y::{default_subscriber, tracing_subscriber::EnvFilter};
+use near_o11y::{
+    default_subscriber,
+    tracing::{info, warn},
+    tracing_subscriber::EnvFilter,
+};
 use openssl_probe::init_ssl_cert_env_vars;
 
 mod configs;
+mod event_types;
+
+const INDEXER: &str = "near_event_streams";
 
 fn main() -> anyhow::Result<()> {
     // We use it to automatically search the for root certificates to perform HTTPS calls
@@ -49,8 +56,53 @@ fn main() -> anyhow::Result<()> {
     Ok(())
 }
 
-async fn listen_blocks(mut stream: tokio::sync::mpsc::Receiver<near_indexer::StreamerMessage>) {
+async fn listen_blocks(
+    mut stream: tokio::sync::mpsc::Receiver<near_indexer::StreamerMessage>,
+) -> anyhow::Result<()> {
     while let Some(streamer_message) = stream.recv().await {
-        eprintln!("{:#?}", serde_json::to_value(streamer_message).unwrap());
+        store_events(&streamer_message)?;
     }
+
+    Ok(())
+}
+
+fn store_events(streamer_message: &near_indexer::StreamerMessage) -> anyhow::Result<()> {
+    streamer_message.shards.iter().for_each(|shard| {
+        for outcome in &shard.receipt_execution_outcomes {
+            let events = extract_events(outcome);
+            for event in events {
+                info!(target: INDEXER, "Event: {:?}", event,)
+                //TODO: store events to kafka
+            }
+        }
+    });
+
+    Ok(())
+}
+
+fn extract_events(
+    outcome: &near_indexer::IndexerExecutionOutcomeWithReceipt,
+) -> Vec<event_types::NearEvent> {
+    let prefix = "EVENT_JSON:";
+    outcome.execution_outcome.outcome.logs.iter().filter_map(|untrimmed_log| {
+        let log = untrimmed_log.trim();
+        if !log.starts_with(prefix) {
+            return None;
+        }
+
+        match serde_json::from_str::<'_, event_types::NearEvent>(
+            log[prefix.len()..].trim(),
+        ) {
+            Ok(result) => Some(result),
+            Err(err) => {
+                warn!(
+                    target: crate::INDEXER,
+                    "Provided event log does not correspond to any of formats defined in NEP. Will ignore this event. \n {:#?} \n{:#?}",
+                    err,
+                    untrimmed_log,
+                );
+                None
+            }
+        }
+    }).collect()
 }
