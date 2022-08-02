@@ -1,6 +1,7 @@
 use clap::Parser;
 use configs::{NesConfig, Opts, SubCommand};
 use events::store_events;
+use futures::StreamExt;
 use near_indexer::{get_default_home, indexer_init_configs, Indexer};
 use openssl_probe::init_ssl_cert_env_vars;
 use rdkafka::producer::FutureProducer;
@@ -34,10 +35,9 @@ fn main() -> anyhow::Result<()> {
                 let indexer = Indexer::new(indexer_config).expect("Indexer::new()");
                 let stream = indexer.streamer();
 
-                actix::spawn(listen_blocks(stream, producer, nes_config))
-                    .await
-                    .unwrap()
-                    .expect("listen_blocks error");
+                listen_blocks(stream, args.concurrency, producer, nes_config).await;
+
+                actix::System::current().stop();
             });
             system.run()?;
         }
@@ -87,13 +87,24 @@ fn init_tracer(opts: &Opts) {
 }
 
 async fn listen_blocks(
-    mut stream: tokio::sync::mpsc::Receiver<near_indexer::StreamerMessage>,
+    stream: tokio::sync::mpsc::Receiver<near_indexer::StreamerMessage>,
+    concurrency: std::num::NonZeroU16,
     producer: FutureProducer,
     nes_config: NesConfig,
+) {
+    let mut handle_messages = tokio_stream::wrappers::ReceiverStream::new(stream)
+        .map(|streamer_message| handle_message(streamer_message, &producer, &nes_config))
+        .buffer_unordered(usize::from(concurrency.get()));
+
+    while let Some(_handle_message) = handle_messages.next().await {}
+}
+
+async fn handle_message(
+    streamer_message: near_indexer::StreamerMessage,
+    producer: &FutureProducer,
+    nes_config: &NesConfig,
 ) -> anyhow::Result<()> {
-    while let Some(streamer_message) = stream.recv().await {
-        store_events(&streamer_message, &producer, &nes_config).await?;
-    }
+    store_events(&streamer_message, producer, nes_config).await?;
 
     Ok(())
 }

@@ -2427,6 +2427,7 @@ dependencies = [
  "config",
  "enum-map",
  "env_logger",
+ "futures",
  "log",
  "near-indexer",
  "near-o11y",
@@ -2435,6 +2436,7 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+ "tokio-stream",
  "tracing",
  "tracing-subscriber",
 ]
