@@ -42,15 +42,17 @@ Change near-event-streams config:
 `vi ./.near/localnet/nes.toml`
 
 ### Run
-`cargo run -r -- --home-dir ./.near/localnet --debug run --stream-while-syncing sync-from-interruption`
+`cargo run -r -- --home-dir ./.near/localnet run --stream-while-syncing sync-from-interruption`
 
 ## Start testnet
 
 ### Init config
+
 `cargo run -r -- --home-dir ./.near/testnet init --chain-id testnet --download-config --download-genesis`
 
 ### Run
-`cargo run -r -- --home-dir ./.near/testnet --debug run --stream-while-syncing sync-from-interruption`
+
+`cargo run -r -- --home-dir ./.near/testnet run --stream-while-syncing sync-from-interruption`
 
 ## Cross-compile linux binary from macos
 
@@ -67,3 +69,7 @@ export AR_x86_64_unknown_linux_gnu=x86_64-unknown-linux-gnu-ar
 ```
 
 `cargo build-linux`
+
+## Demo
+
+![Demo](/docs/demo-nes.png?raw=true)
