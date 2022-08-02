@@ -1,9 +1,0 @@
-near_events_topic=
-
-[kafka]
-bootstrap.servers={{ BROKER_ENDPOINT }}
-security.protocol=SASL_SSL
-sasl.mechanisms=PLAIN
-sasl.username={{ CLUSTER_API_KEY }}
-sasl.password={{ CLUSTER_API_SECRET }}
-session.timeout.ms=45000

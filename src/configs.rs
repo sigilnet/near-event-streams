@@ -1,12 +1,11 @@
 use std::collections::HashMap;
 
 use clap::Parser;
-use config::FileFormat;
 use near_indexer::near_primitives::types::Gas;
 use rdkafka::config::ClientConfig;
 use serde::Deserialize;
 
-pub const NES_CONFIG_FILENAME: &str = "nes.conf";
+pub const NES_CONFIG_FILENAME: &str = "nes.toml";
 
 #[derive(Parser, Debug)]
 #[clap(version = "0.1", author = "Sigil Network <contact@sigilnet.com>")]
@@ -151,13 +150,15 @@ pub struct NesConfig {
     pub kafka_config: ClientConfig,
 
     pub near_events_topic: String,
+
+    pub whitelist_contract_ids: Vec<String>,
 }
 
 impl NesConfig {
     pub fn new(home_dir: std::path::PathBuf) -> anyhow::Result<Self> {
         let conf_file = home_dir.join(NES_CONFIG_FILENAME);
         let conf = config::Config::builder()
-            .add_source(config::File::from(conf_file).format(FileFormat::Ini))
+            .add_source(config::File::from(conf_file))
             .build()?;
 
         let mut nes_conf = conf.try_deserialize::<Self>()?;

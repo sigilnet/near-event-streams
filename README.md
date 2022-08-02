@@ -35,11 +35,11 @@ vi ./.near/localnet/config.json
 ...
 ```
 
-`cp ./nes.conf.sample ./.near/localnet/nes.conf`
+`cp ./nes.toml.sample ./.near/localnet/nes.toml`
 
 Change near-event-streams config:
 
-`vi ./.near/localnet/nes.conf`
+`vi ./.near/localnet/nes.toml`
 
 ### Run
 `cargo run -r -- --home-dir ./.near/localnet --debug run --stream-while-syncing sync-from-interruption`

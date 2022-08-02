@@ -1,14 +1,16 @@
 use clap::Parser;
 use configs::{NesConfig, Opts, SubCommand};
+use events::store_events;
 use near_indexer::{get_default_home, indexer_init_configs, Indexer};
 use openssl_probe::init_ssl_cert_env_vars;
-use tracing::{debug, info, warn};
+use rdkafka::producer::FutureProducer;
 use tracing_subscriber::EnvFilter;
 
 mod configs;
 mod event_types;
+mod events;
 
-const INDEXER: &str = "near_event_streams";
+pub const INDEXER: &str = "near_event_streams";
 
 fn main() -> anyhow::Result<()> {
     // We use it to automatically search the for root certificates to perform HTTPS calls
@@ -24,13 +26,18 @@ fn main() -> anyhow::Result<()> {
     match opts.subcmd {
         SubCommand::Run(args) => {
             let indexer_config = args.to_indexer_config(home_dir.clone());
-            let _nes_config = NesConfig::new(home_dir)?;
+            let nes_config = NesConfig::new(home_dir)?;
+            let producer: FutureProducer = nes_config.kafka_config.create()?;
 
             let system = actix::System::new();
             system.block_on(async move {
                 let indexer = Indexer::new(indexer_config).expect("Indexer::new()");
                 let stream = indexer.streamer();
-                actix::spawn(listen_blocks(stream));
+
+                actix::spawn(listen_blocks(stream, producer, nes_config))
+                    .await
+                    .unwrap()
+                    .expect("listen_blocks error");
             });
             system.run()?;
         }
@@ -81,56 +88,12 @@ fn init_tracer(opts: &Opts) {
 
 async fn listen_blocks(
     mut stream: tokio::sync::mpsc::Receiver<near_indexer::StreamerMessage>,
+    producer: FutureProducer,
+    nes_config: NesConfig,
 ) -> anyhow::Result<()> {
     while let Some(streamer_message) = stream.recv().await {
-        store_events(&streamer_message)?;
+        store_events(&streamer_message, &producer, &nes_config).await?;
     }
 
     Ok(())
-}
-
-fn store_events(streamer_message: &near_indexer::StreamerMessage) -> anyhow::Result<()> {
-    debug!(
-        target: INDEXER,
-        "Block height {}", &streamer_message.block.header.height
-    );
-
-    streamer_message.shards.iter().for_each(|shard| {
-        for outcome in &shard.receipt_execution_outcomes {
-            let events = extract_events(outcome);
-            for event in events {
-                info!(target: INDEXER, "Event: {:?}", event,)
-                //TODO: store events to kafka
-            }
-        }
-    });
-
-    Ok(())
-}
-
-fn extract_events(
-    outcome: &near_indexer::IndexerExecutionOutcomeWithReceipt,
-) -> Vec<event_types::NearEvent> {
-    let prefix = "EVENT_JSON:";
-    outcome.execution_outcome.outcome.logs.iter().filter_map(|untrimmed_log| {
-        let log = untrimmed_log.trim();
-        if !log.starts_with(prefix) {
-            return None;
-        }
-
-        match serde_json::from_str::<'_, event_types::NearEvent>(
-            log[prefix.len()..].trim(),
-        ) {
-            Ok(result) => Some(result),
-            Err(err) => {
-                warn!(
-                    target: crate::INDEXER,
-                    "Provided event log does not correspond to any of formats defined in NEP. Will ignore this event. \n {:#?} \n{:#?}",
-                    err,
-                    untrimmed_log,
-                );
-                None
-            }
-        }
-    }).collect()
 }

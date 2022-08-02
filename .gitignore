@@ -3,4 +3,4 @@ target
 .nearup
 .near-indexer
 .env
-nes.conf
+nes.toml
