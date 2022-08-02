@@ -13,7 +13,11 @@ pub struct GenericEvent {
 
 impl GenericEvent {
     pub fn to_key(&self) -> String {
-        format!("{}:{}", self.standard, self.event)
+        format!("{}.{}", self.standard, self.event)
+    }
+
+    pub fn to_topic(&self, prefix: &str) -> String {
+        format!("{}.{}", prefix, &self.to_key())
     }
 }
 

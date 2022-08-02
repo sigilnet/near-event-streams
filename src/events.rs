@@ -37,7 +37,7 @@ pub async fn store_events(
         let event_payload = serde_json::to_string(&generic_event)?;
         let delivery_status = producer
             .send(
-                FutureRecord::to(&nes_config.near_events_topic)
+                FutureRecord::to(&generic_event.to_topic(&nes_config.near_events_topic_prefix))
                     .payload(&event_payload)
                     .key(&generic_event.to_key()),
                 Duration::from_secs(0),

@@ -152,7 +152,7 @@ pub struct NesConfig {
     #[serde(skip)]
     pub kafka_config: ClientConfig,
 
-    pub near_events_topic: String,
+    pub near_events_topic_prefix: String,
 
     pub whitelist_contract_ids: Vec<String>,
 }

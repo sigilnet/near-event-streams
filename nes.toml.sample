@@ -1,4 +1,4 @@
-near_events_topic=""
+near_events_topic_prefix=""
 whitelist_contract_ids=[]
 
 [kafka]
