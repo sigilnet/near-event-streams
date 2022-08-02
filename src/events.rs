@@ -16,9 +16,6 @@ pub async fn store_events(
     let block_height = streamer_message.block.header.height;
     let block_timestamp = streamer_message.block.header.timestamp;
 
-    // TODO:
-    // 3. store events to kafka
-
     debug!(target: crate::INDEXER, "Block height {}", &block_height);
 
     let generic_events = streamer_message
@@ -37,7 +34,6 @@ pub async fn store_events(
         .collect::<Vec<GenericEvent>>();
 
     for generic_event in generic_events.iter() {
-        info!(target: crate::INDEXER, "Sending event {:?}", &generic_event);
         let event_payload = serde_json::to_string(&generic_event)?;
         let delivery_status = producer
             .send(
@@ -51,7 +47,7 @@ pub async fn store_events(
         let delivery_status = delivery_status.map_err(|e| e.0);
         let (partition, offset) = delivery_status?;
         info!(
-            "Sent event {:?} to Kafka success at {}:{}",
+            "Sent event {:?} to Kafka success at partition: {}, offset: {}",
             generic_event, partition, offset
         );
     }
