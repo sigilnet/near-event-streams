@@ -1,5 +1,5 @@
 use clap::Parser;
-use configs::{Opts, SubCommand};
+use configs::{NesConfig, Opts, SubCommand};
 use near_indexer::{get_default_home, indexer_init_configs, Indexer};
 use openssl_probe::init_ssl_cert_env_vars;
 use tracing::{debug, info, warn};
@@ -23,7 +23,9 @@ fn main() -> anyhow::Result<()> {
 
     match opts.subcmd {
         SubCommand::Run(args) => {
-            let indexer_config = args.to_indexer_config(home_dir);
+            let indexer_config = args.to_indexer_config(home_dir.clone());
+            let _nes_config = NesConfig::new(home_dir)?;
+
             let system = actix::System::new();
             system.block_on(async move {
                 let indexer = Indexer::new(indexer_config).expect("Indexer::new()");

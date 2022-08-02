@@ -1,5 +1,12 @@
+use std::collections::HashMap;
+
 use clap::Parser;
+use config::FileFormat;
 use near_indexer::near_primitives::types::Gas;
+use rdkafka::config::ClientConfig;
+use serde::Deserialize;
+
+pub const NES_CONFIG_FILENAME: &str = "nes.conf";
 
 #[derive(Parser, Debug)]
 #[clap(version = "0.1", author = "Sigil Network <contact@sigilnet.com>")]
@@ -133,5 +140,37 @@ impl From<InitConfigArgs> for near_indexer::InitConfigArgs {
             boot_nodes: config_args.boot_nodes,
             max_gas_burnt_view: config_args.max_gas_burnt_view,
         }
+    }
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct NesConfig {
+    pub kafka: HashMap<String, String>,
+
+    #[serde(skip)]
+    pub kafka_config: ClientConfig,
+
+    pub near_events_topic: String,
+}
+
+impl NesConfig {
+    pub fn new(home_dir: std::path::PathBuf) -> anyhow::Result<Self> {
+        let conf_file = home_dir.join(NES_CONFIG_FILENAME);
+        let conf = config::Config::builder()
+            .add_source(config::File::from(conf_file).format(FileFormat::Ini))
+            .build()?;
+
+        let mut nes_conf = conf.try_deserialize::<Self>()?;
+        nes_conf.init_kafka_config();
+
+        Ok(nes_conf)
+    }
+
+    fn init_kafka_config(&mut self) {
+        let mut kafka_conf = ClientConfig::new();
+        self.kafka.iter().for_each(|(k, v)| {
+            kafka_conf.set(k, v);
+        });
+        self.kafka_config = kafka_conf;
     }
 }
