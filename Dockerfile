@@ -1,6 +1,4 @@
-FROM rust:1.61 as base-env
-
-FROM base-env AS build-env
+FROM rust:1.61 as build-env
 
 WORKDIR /app
 
@@ -19,7 +17,7 @@ COPY src  ./src
 RUN cargo build --release
 
 # final image
-FROM rust:1.61-slim
+FROM debian:buster-slim
 COPY --from=build-env /app/target/release/near-event-streams /app/
 WORKDIR /app
 
