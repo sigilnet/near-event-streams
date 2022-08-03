@@ -1,0 +1,26 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - 'build-image'
+
+jobs:
+  build_and_push_to_registry:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v3
+      - name: Login to DockerHub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      - name: Build and push
+        uses: docker/build-push-action@v3
+        with:
+          context: .
+          push: true
+          tags: sigilnet/near-event-streams:latest
+          cache-from: type=registry,ref=sigilnet/near-event-streams:buildcache
+          cache-to: type=registry,ref=sigilnet/near-event-streams:buildcache,mode=max
