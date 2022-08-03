@@ -19,7 +19,7 @@ COPY src  ./src
 RUN cargo build --release
 
 # final image
-FROM base-env
+FROM rust:1.61-slim
 COPY --from=build-env /app/target/release/near-event-streams /app/
 WORKDIR /app
 
