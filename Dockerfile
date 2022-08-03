@@ -11,7 +11,7 @@ RUN apt-get update && apt-get install -y build-essential \
     python \
     valgrind \
     zlib1g-dev \
-    cmake
+    cmake libclang-dev
 
 COPY Cargo.toml Cargo.lock  ./
 COPY src  ./src
