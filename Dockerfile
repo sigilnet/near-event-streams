@@ -1,4 +1,4 @@
-FROM rust:1.61 as build-env
+FROM rust:1.61-buster as build-env
 
 WORKDIR /app
 
