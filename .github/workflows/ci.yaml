@@ -23,6 +23,6 @@ jobs:
         with:
           context: .
           push: true
-          tags: ${{ GITHUB_REPOSITORY }}:${{ GITHUB_REF_NAME }}
-          cache-from: type=registry,ref=${{ GITHUB_REPOSITORY }}:buildcache
-          cache-to: type=registry,ref=${{ GITHUB_REPOSITORY }}:buildcache,mode=max
+          tags: ${{ env.GITHUB_REPOSITORY }}:${{ env.GITHUB_REF_NAME }}
+          cache-from: type=registry,ref=${{ env.GITHUB_REPOSITORY }}:buildcache
+          cache-to: type=registry,ref=${{ env.GITHUB_REPOSITORY }}:buildcache,mode=max
