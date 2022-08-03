@@ -2,8 +2,8 @@ name: CI
 
 on:
   push:
-    branches:
-      - 'build-image'
+    tags:
+      - '*'
 
 jobs:
   build_and_push_to_registry:
