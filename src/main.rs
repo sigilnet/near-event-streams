@@ -4,7 +4,10 @@ use events::store_events;
 use futures::StreamExt;
 use near_indexer::{get_default_home, indexer_init_configs, Indexer};
 use openssl_probe::init_ssl_cert_env_vars;
-use rdkafka::producer::FutureProducer;
+use rdkafka::{
+    admin::AdminClient, client::DefaultClientContext, consumer::StreamConsumer,
+    producer::FutureProducer,
+};
 use tracing_subscriber::EnvFilter;
 
 mod configs;
@@ -28,14 +31,15 @@ fn main() -> anyhow::Result<()> {
         SubCommand::Run(args) => {
             let indexer_config = args.to_indexer_config(home_dir.clone());
             let nes_config = NesConfig::new(home_dir)?;
-            let producer: FutureProducer = nes_config.kafka_config.create()?;
 
             let system = actix::System::new();
             system.block_on(async move {
                 let indexer = Indexer::new(indexer_config).expect("Indexer::new()");
                 let stream = indexer.streamer();
 
-                listen_blocks(stream, args.concurrency, producer, nes_config).await;
+                listen_blocks(stream, args.concurrency, nes_config)
+                    .await
+                    .expect("Exitting...");
 
                 actix::System::current().stop();
             });
@@ -89,22 +93,46 @@ fn init_tracer(opts: &Opts) {
 async fn listen_blocks(
     stream: tokio::sync::mpsc::Receiver<near_indexer::StreamerMessage>,
     concurrency: std::num::NonZeroU16,
-    producer: FutureProducer,
     nes_config: NesConfig,
-) {
+) -> anyhow::Result<()> {
+    let producer: FutureProducer = nes_config.kafka_config.create()?;
+    let consumer: StreamConsumer = nes_config.kafka_config.create()?;
+    let admin_client: AdminClient<DefaultClientContext> = nes_config.kafka_config.create()?;
+
     let mut handle_messages = tokio_stream::wrappers::ReceiverStream::new(stream)
-        .map(|streamer_message| handle_message(streamer_message, &producer, &nes_config))
+        .map(|streamer_message| {
+            handle_message(
+                streamer_message,
+                &producer,
+                &consumer,
+                &admin_client,
+                &nes_config,
+            )
+        })
         .buffer_unordered(usize::from(concurrency.get()));
 
-    while let Some(_handle_message) = handle_messages.next().await {}
+    while let Some(handle_message) = handle_messages.next().await {
+        handle_message?;
+    }
+
+    Ok(())
 }
 
 async fn handle_message(
     streamer_message: near_indexer::StreamerMessage,
     producer: &FutureProducer,
+    consumer: &StreamConsumer,
+    admin_client: &AdminClient<DefaultClientContext>,
     nes_config: &NesConfig,
 ) -> anyhow::Result<()> {
-    store_events(&streamer_message, producer, nes_config).await?;
+    store_events(
+        &streamer_message,
+        producer,
+        consumer,
+        admin_client,
+        nes_config,
+    )
+    .await?;
 
     Ok(())
 }

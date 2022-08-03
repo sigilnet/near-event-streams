@@ -155,6 +155,8 @@ pub struct NesConfig {
     pub near_events_topic_prefix: String,
 
     pub whitelist_contract_ids: Vec<String>,
+    pub new_topic_partitions: i32,
+    pub new_topic_replication: i32,
 }
 
 impl NesConfig {

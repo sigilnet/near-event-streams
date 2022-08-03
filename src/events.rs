@@ -1,6 +1,11 @@
 use std::time::Duration;
 
-use rdkafka::producer::{FutureProducer, FutureRecord};
+use rdkafka::{
+    admin::{AdminClient, AdminOptions, NewTopic, TopicReplication},
+    client::DefaultClientContext,
+    consumer::{Consumer, StreamConsumer},
+    producer::{FutureProducer, FutureRecord},
+};
 use tracing::{debug, info, warn};
 
 use crate::{
@@ -8,9 +13,61 @@ use crate::{
     event_types::{EmitInfo, GenericEvent},
 };
 
+pub async fn ensure_topic(
+    consumer: &StreamConsumer,
+    admin_client: &AdminClient<DefaultClientContext>,
+    nes_config: &NesConfig,
+    topic: &str,
+) -> anyhow::Result<()> {
+    let metadata = consumer.fetch_metadata(None, Duration::from_secs(1));
+
+    if let Err(err) = &metadata {
+        warn!("Could not fetch Kafka metadata: {:?}", err);
+        return Ok(());
+    }
+
+    let metadata = metadata.unwrap();
+
+    let topic_names = metadata
+        .topics()
+        .iter()
+        .map(|t| t.name())
+        .collect::<Vec<&str>>();
+
+    debug!("Kafka topics: {:?}", topic_names);
+
+    let existed = metadata
+        .topics()
+        .iter()
+        .any(|topic_metadata| topic_metadata.name() == topic);
+
+    if !existed {
+        let results = admin_client
+            .create_topics(
+                &[NewTopic::new(
+                    topic,
+                    nes_config.new_topic_partitions,
+                    TopicReplication::Fixed(nes_config.new_topic_replication),
+                )],
+                &AdminOptions::new(),
+            )
+            .await?;
+
+        for result in results {
+            let status = result.map_err(|e| e.1);
+            let status = status?;
+            info!("Kafka created new topics: {:?}", status);
+        }
+    }
+
+    Ok(())
+}
+
 pub async fn store_events(
     streamer_message: &near_indexer::StreamerMessage,
     producer: &FutureProducer,
+    consumer: &StreamConsumer,
+    admin_client: &AdminClient<DefaultClientContext>,
     nes_config: &NesConfig,
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
@@ -35,9 +92,13 @@ pub async fn store_events(
 
     for generic_event in generic_events.iter() {
         let event_payload = serde_json::to_string(&generic_event)?;
+        let event_topic = generic_event.to_topic(&nes_config.near_events_topic_prefix);
+
+        ensure_topic(consumer, admin_client, nes_config, &event_topic).await?;
+
         let delivery_status = producer
             .send(
-                FutureRecord::to(&generic_event.to_topic(&nes_config.near_events_topic_prefix))
+                FutureRecord::to(&event_topic)
                     .payload(&event_payload)
                     .key(&generic_event.to_key()),
                 Duration::from_secs(0),

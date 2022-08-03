@@ -1,4 +1,6 @@
 near_events_topic_prefix=""
+new_topic_partitions=1
+new_topic_replication=3
 whitelist_contract_ids=[]
 
 [kafka]
