@@ -16,9 +16,12 @@ COPY src  ./src
 
 RUN cargo build --release
 
+RUN apt-get install -y ca-certificates
+
 # final image
 FROM debian:buster-slim
 COPY --from=build-env /app/target/release/near-event-streams /app/
+COPY --from=build-env /etc/ssl/certs/ca-certificates.crt /etc/ssl/certs/ca-certificates.crt
 WORKDIR /app
 
 ENTRYPOINT ["./near-event-streams"]
