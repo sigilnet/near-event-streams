@@ -85,11 +85,7 @@ pub async fn send_event(
         .await;
 
     let delivery_status = delivery_status.map_err(|e| e.0);
-    let (partition, offset) = delivery_status?;
-    info!(
-        "Sent event {} to Kafka success at partition: {}, offset: {}",
-        payload, partition, offset
-    );
+    delivery_status?;
 
     Ok(())
 }
@@ -147,6 +143,8 @@ pub async fn store_events(
             &event_payload,
         )
         .await?;
+
+        info!("Sent event {} to Kafka success", &event_payload);
     }
 
     Ok(())
