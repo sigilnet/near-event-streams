@@ -1,3 +1,4 @@
+near_events_all_topic=""
 near_events_topic_prefix=""
 force_create_new_topic=false
 new_topic_partitions=1

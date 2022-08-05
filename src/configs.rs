@@ -153,6 +153,7 @@ pub struct NesConfig {
     pub kafka_config: ClientConfig,
 
     pub near_events_topic_prefix: String,
+    pub near_events_all_topic: String,
 
     pub whitelist_contract_ids: Vec<String>,
     pub new_topic_partitions: i32,

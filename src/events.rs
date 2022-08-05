@@ -59,9 +59,33 @@ pub async fn ensure_topic(
         for result in results {
             let status = result.map_err(|e| e.1);
             let status = status?;
-            info!("Kafka created new topics: {:?}", status);
+            info!("Kafka created new topic: {:?}", status);
         }
     }
+
+    Ok(())
+}
+
+pub async fn send_event(
+    producer: &FutureProducer,
+    consumer: &StreamConsumer,
+    admin_client: &AdminClient<DefaultClientContext>,
+    nes_config: &NesConfig,
+    topic: &str,
+    key: &str,
+    payload: &str,
+) -> anyhow::Result<()> {
+    ensure_topic(consumer, admin_client, nes_config, topic).await?;
+
+    let delivery_status = producer
+        .send(
+            FutureRecord::to(topic).payload(payload).key(key),
+            Duration::from_secs(0),
+        )
+        .await;
+
+    let delivery_status = delivery_status.map_err(|e| e.0);
+    delivery_status?;
 
     Ok(())
 }
@@ -96,24 +120,31 @@ pub async fn store_events(
     for generic_event in generic_events.iter() {
         let event_payload = serde_json::to_string(&generic_event)?;
         let event_topic = generic_event.to_topic(&nes_config.near_events_topic_prefix);
+        let event_key = generic_event.to_key();
 
-        ensure_topic(consumer, admin_client, nes_config, &event_topic).await?;
+        send_event(
+            producer,
+            consumer,
+            admin_client,
+            nes_config,
+            &nes_config.near_events_all_topic,
+            &event_key,
+            &event_payload,
+        )
+        .await?;
 
-        let delivery_status = producer
-            .send(
-                FutureRecord::to(&event_topic)
-                    .payload(&event_payload)
-                    .key(&generic_event.to_key()),
-                Duration::from_secs(0),
-            )
-            .await;
+        send_event(
+            producer,
+            consumer,
+            admin_client,
+            nes_config,
+            &event_topic,
+            &event_key,
+            &event_payload,
+        )
+        .await?;
 
-        let delivery_status = delivery_status.map_err(|e| e.0);
-        let (partition, offset) = delivery_status?;
-        info!(
-            "Sent event {:?} to Kafka success at partition: {}, offset: {}",
-            generic_event, partition, offset
-        );
+        info!("Sent event {} to Kafka success", &event_payload);
     }
 
     Ok(())
