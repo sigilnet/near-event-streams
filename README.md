@@ -12,11 +12,11 @@
 
 `export LOCALNEAR_PATH=<YOUR_LOCALNEAR_DIR>`
 
-`export LOCALNET_NODE_PUBKEY=$(cat $LOCALNEAR_PATH/.near-indexer/localnet/node_key.json | jq -r ".public_key")`
+`export LOCALNET_NODE_PUBKEY=$(cat $LOCALNEAR_PATH/.near/localnet/node_key.json | jq -r ".public_key")`
 
 `cargo run -r -- --home-dir ./.near/localnet init --chain-id localnet $LOCALNET_NODE_PUBKEY@0.0.0.0:34567`
 
-`cp $LOCALNEAR_PATH/.near-indexer/localnet/genesis.json ./.near/localnet/genesis.json`
+`cp $LOCALNEAR_PATH/.near/localnet/genesis.json ./.near/localnet/genesis.json`
 
 `rm ./.near/localnet/validator_key.json`
 
