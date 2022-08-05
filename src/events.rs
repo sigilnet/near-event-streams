@@ -19,6 +19,9 @@ pub async fn ensure_topic(
     nes_config: &NesConfig,
     topic: &str,
 ) -> anyhow::Result<()> {
+    if !nes_config.force_create_new_topic {
+        return Ok(());
+    }
     let metadata = consumer.fetch_metadata(None, Duration::from_secs(1));
 
     if let Err(err) = &metadata {
