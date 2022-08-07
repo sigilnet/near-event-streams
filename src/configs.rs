@@ -159,6 +159,7 @@ pub struct NesConfig {
     pub new_topic_partitions: i32,
     pub new_topic_replication: i32,
     pub force_create_new_topic: bool,
+    pub blacklist_contract_ids: Vec<String>,
 }
 
 impl NesConfig {

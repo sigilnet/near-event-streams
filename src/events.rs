@@ -115,6 +115,15 @@ pub async fn store_events(
                 .whitelist_contract_ids
                 .contains(&emit_info.contract_account_id)
         })
+        .filter(|e| {
+            if nes_config.blacklist_contract_ids.is_empty() {
+                return true;
+            }
+            let emit_info = e.clone().emit_info.unwrap_or_default();
+            !nes_config
+                .blacklist_contract_ids
+                .contains(&emit_info.contract_account_id)
+        })
         .collect::<Vec<GenericEvent>>();
 
     for generic_event in generic_events.iter() {

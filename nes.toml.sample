@@ -4,6 +4,7 @@ force_create_new_topic=false
 new_topic_partitions=1
 new_topic_replication=3
 whitelist_contract_ids=[]
+blacklist_contract_ids=[]
 
 [kafka]
 "bootstrap.servers"="{{ BROKER_ENDPOINT }}"
