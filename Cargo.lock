@@ -2429,6 +2429,7 @@ dependencies = [
  "env_logger",
  "futures",
  "log",
+ "near-client",
  "near-indexer",
  "near-o11y",
  "openssl-probe",

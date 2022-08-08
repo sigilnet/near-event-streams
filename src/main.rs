@@ -13,6 +13,7 @@ use tracing_subscriber::EnvFilter;
 mod configs;
 mod event_types;
 mod events;
+mod token;
 
 pub const INDEXER: &str = "near_event_streams";
 
@@ -36,6 +37,7 @@ fn main() -> anyhow::Result<()> {
             system.block_on(async move {
                 let indexer = Indexer::new(indexer_config).expect("Indexer::new()");
                 let stream = indexer.streamer();
+                let _view_client = indexer.client_actors().0;
 
                 listen_blocks(stream, args.concurrency, nes_config)
                     .await
