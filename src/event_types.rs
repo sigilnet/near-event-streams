@@ -13,11 +13,18 @@ pub struct GenericEvent {
 
 impl GenericEvent {
     pub fn to_key(&self) -> String {
+        if let Some(emit_info) = &self.emit_info {
+            return emit_info.contract_account_id.clone();
+        }
+        self.default_key()
+    }
+
+    pub fn default_key(&self) -> String {
         format!("{}.{}", self.standard, self.event)
     }
 
     pub fn to_topic(&self, prefix: &str) -> String {
-        format!("{}.{}", prefix, &self.to_key())
+        format!("{}.{}", prefix, &self.default_key())
     }
 }
 
