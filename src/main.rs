@@ -44,9 +44,10 @@ fn main() -> anyhow::Result<()> {
                 let stream = indexer.streamer();
                 let view_client = indexer.client_actors().0;
 
-                let stats: Arc<Mutex<Stats>> = Arc::new(Mutex::new(Stats::new()));
-
-                actix::spawn(stats_logger(Arc::clone(&stats), view_client));
+                if nes_config.stats_enabled {
+                    let stats: Arc<Mutex<Stats>> = Arc::new(Mutex::new(Stats::new()));
+                    actix::spawn(stats_logger(Arc::clone(&stats), view_client));
+                }
 
                 listen_blocks(stream, args.concurrency, nes_config)
                     .await
