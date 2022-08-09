@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use clap::Parser;
 use configs::{NesConfig, Opts, SubCommand};
 use events::store_events;
@@ -8,11 +10,14 @@ use rdkafka::{
     admin::AdminClient, client::DefaultClientContext, consumer::StreamConsumer,
     producer::FutureProducer,
 };
+use stats::{stats_logger, Stats};
+use tokio::sync::Mutex;
 use tracing_subscriber::EnvFilter;
 
 mod configs;
 mod event_types;
 mod events;
+mod stats;
 mod token;
 
 pub const INDEXER: &str = "near_event_streams";
@@ -37,7 +42,11 @@ fn main() -> anyhow::Result<()> {
             system.block_on(async move {
                 let indexer = Indexer::new(indexer_config).expect("Indexer::new()");
                 let stream = indexer.streamer();
-                let _view_client = indexer.client_actors().0;
+                let view_client = indexer.client_actors().0;
+
+                let stats: Arc<Mutex<Stats>> = Arc::new(Mutex::new(Stats::new()));
+
+                actix::spawn(stats_logger(Arc::clone(&stats), view_client));
 
                 listen_blocks(stream, args.concurrency, nes_config)
                     .await

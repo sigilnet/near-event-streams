@@ -2428,6 +2428,7 @@ dependencies = [
  "enum-map",
  "env_logger",
  "futures",
+ "humantime",
  "log",
  "near-client",
  "near-indexer",
