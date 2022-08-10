@@ -239,16 +239,18 @@ async fn enrich_event_metadata(
     let mut enriched_data = event.data.clone();
     match enriched_data {
         EventData::Nep171(Nep171Data::MintFlat(ref mut data)) => {
-            let (metadatas, extras) =
+            let (_ids, metadatas, extras) =
                 get_metadatas(view_client, contract_account_id, &data.token_ids).await?;
 
+            data._ids = Some(_ids);
             data.metadatas = Some(metadatas);
             data.metadata_extras = Some(extras);
         }
         EventData::Nep171(Nep171Data::TransferFlat(ref mut data)) => {
-            let (metadatas, extras) =
+            let (_ids, metadatas, extras) =
                 get_metadatas(view_client, contract_account_id, &data.token_ids).await?;
 
+            data._ids = Some(_ids);
             data.metadatas = Some(metadatas);
             data.metadata_extras = Some(extras);
         }

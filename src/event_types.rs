@@ -89,6 +89,8 @@ pub struct Nep171MintData {
     pub metadatas: Option<Vec<Option<TokenMetadata>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata_extras: Option<Vec<Option<serde_json::Value>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub _ids: Option<Vec<Option<String>>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -102,6 +104,8 @@ pub struct Nep171TransferData {
     pub metadatas: Option<Vec<Option<TokenMetadata>>>,
     #[serde(skip_serializing_if = "Option::is_none")]
     pub metadata_extras: Option<Vec<Option<serde_json::Value>>>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub _ids: Option<Vec<Option<String>>>,
 }
 
 #[cfg(test)]
