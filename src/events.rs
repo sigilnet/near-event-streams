@@ -1,9 +1,10 @@
 use std::time::Duration;
 
 use futures::{
-    stream::{self, FuturesOrdered},
+    stream::{self, FuturesOrdered, FuturesUnordered},
     StreamExt, TryStreamExt,
 };
+use itertools::Itertools;
 use rdkafka::{
     admin::{AdminClient, AdminOptions, NewTopic, TopicReplication},
     client::DefaultClientContext,
@@ -110,16 +111,46 @@ pub async fn store_events(
 
     debug!(target: crate::INDEXER, "Block height {}", &block_height);
 
-    let events = streamer_message
+    let event_partitions = streamer_message
         .shards
         .iter()
         .flat_map(|shard| collect_events(shard, block_height, block_timestamp, nes_config))
-        .collect::<Vec<NearEvent>>();
+        .into_group_map_by(|event| {
+            event
+                .emit_info
+                .clone()
+                .unwrap_or_default()
+                .contract_account_id
+        });
 
-    // TODO: improve throughput:
-    // 1. event partitioning by contract_account_id
-    // 2. use tokio::spawn to send each partition via different tasks
+    event_partitions
+        .values()
+        .into_iter()
+        .map(|events| {
+            send_events(
+                producer,
+                consumer,
+                admin_client,
+                nes_config,
+                view_client,
+                events,
+            )
+        })
+        .collect::<FuturesUnordered<_>>()
+        .try_collect::<Vec<()>>()
+        .await?;
 
+    Ok(())
+}
+
+async fn send_events(
+    producer: &FutureProducer,
+    consumer: &StreamConsumer,
+    admin_client: &AdminClient<DefaultClientContext>,
+    nes_config: &NesConfig,
+    view_client: &actix::Addr<near_client::ViewClientActor>,
+    events: &[NearEvent],
+) -> anyhow::Result<()> {
     for event in events.iter() {
         let event_topic = event.to_topic(&nes_config.near_events_topic_prefix);
 
