@@ -5,6 +5,8 @@ new_topic_partitions=1
 new_topic_replication=3
 whitelist_contract_ids=[]
 blacklist_contract_ids=[]
+stats_enabled=false
+enrich_metadata=false
 
 [kafka]
 "bootstrap.servers"="{{ BROKER_ENDPOINT }}"

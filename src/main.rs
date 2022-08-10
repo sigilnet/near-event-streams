@@ -1,3 +1,5 @@
+use std::sync::Arc;
+
 use clap::Parser;
 use configs::{NesConfig, Opts, SubCommand};
 use events::store_events;
@@ -8,11 +10,15 @@ use rdkafka::{
     admin::AdminClient, client::DefaultClientContext, consumer::StreamConsumer,
     producer::FutureProducer,
 };
+use stats::{end_process_block, start_process_block, stats_logger, Stats};
+use tokio::sync::Mutex;
 use tracing_subscriber::EnvFilter;
 
 mod configs;
 mod event_types;
 mod events;
+mod stats;
+mod token;
 
 pub const INDEXER: &str = "near_event_streams";
 
@@ -36,10 +42,22 @@ fn main() -> anyhow::Result<()> {
             system.block_on(async move {
                 let indexer = Indexer::new(indexer_config).expect("Indexer::new()");
                 let stream = indexer.streamer();
+                let view_client = indexer.client_actors().0;
 
-                listen_blocks(stream, args.concurrency, nes_config)
-                    .await
-                    .expect("Exitting...");
+                let stats: Arc<Mutex<Stats>> = Arc::new(Mutex::new(Stats::new()));
+                if nes_config.stats_enabled {
+                    actix::spawn(stats_logger(Arc::clone(&stats), view_client.clone()));
+                }
+
+                listen_blocks(
+                    stream,
+                    args.concurrency,
+                    nes_config,
+                    view_client.clone(),
+                    stats.clone(),
+                )
+                .await
+                .expect("Exitting...");
 
                 actix::System::current().stop();
             });
@@ -94,6 +112,8 @@ async fn listen_blocks(
     stream: tokio::sync::mpsc::Receiver<near_indexer::StreamerMessage>,
     concurrency: std::num::NonZeroU16,
     nes_config: NesConfig,
+    view_client: actix::Addr<near_client::ViewClientActor>,
+    stats: Arc<Mutex<Stats>>,
 ) -> anyhow::Result<()> {
     let producer: FutureProducer = nes_config.kafka_config.create()?;
     let consumer: StreamConsumer = nes_config.kafka_config.create()?;
@@ -106,7 +126,9 @@ async fn listen_blocks(
                 &producer,
                 &consumer,
                 &admin_client,
+                &view_client,
                 &nes_config,
+                stats.clone(),
             )
         })
         .buffer_unordered(usize::from(concurrency.get()));
@@ -123,16 +145,24 @@ async fn handle_message(
     producer: &FutureProducer,
     consumer: &StreamConsumer,
     admin_client: &AdminClient<DefaultClientContext>,
+    view_client: &actix::Addr<near_client::ViewClientActor>,
     nes_config: &NesConfig,
+    stats: Arc<Mutex<Stats>>,
 ) -> anyhow::Result<()> {
+    let block_height = streamer_message.block.header.height;
+    start_process_block(&stats, block_height).await;
+
     store_events(
         &streamer_message,
         producer,
         consumer,
         admin_client,
+        view_client,
         nes_config,
     )
     .await?;
+
+    end_process_block(&stats, block_height).await;
 
     Ok(())
 }
