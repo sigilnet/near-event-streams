@@ -117,7 +117,7 @@ pub async fn get_metadatas(
     client: &actix::Addr<near_client::ViewClientActor>,
     contract_account_id: &str,
     token_ids: &[String],
-) -> anyhow::Result<Vec<Option<TokenMetadata>>> {
+) -> anyhow::Result<(Vec<Option<TokenMetadata>>, Vec<Option<serde_json::Value>>)> {
     let metadatas: Vec<Option<TokenMetadata>> = token_ids
         .iter()
         .map(|token_id| get_nft_token(client, contract_account_id, token_id))
@@ -131,5 +131,16 @@ pub async fn get_metadatas(
         })
         .collect();
 
-    Ok(metadatas)
+    let extras: Vec<Option<serde_json::Value>> = metadatas
+        .iter()
+        .map(|metadata| match metadata {
+            Some(ref metadata) => match metadata.extra {
+                Some(ref extra) => serde_json::from_str::<'_, serde_json::Value>(extra).ok(),
+                None => None,
+            },
+            None => None,
+        })
+        .collect();
+
+    Ok((metadatas, extras))
 }
