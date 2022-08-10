@@ -10,7 +10,7 @@ use rdkafka::{
     admin::AdminClient, client::DefaultClientContext, consumer::StreamConsumer,
     producer::FutureProducer,
 };
-use stats::{stats_logger, Stats};
+use stats::{end_process_block, start_process_block, stats_logger, Stats};
 use tokio::sync::Mutex;
 use tracing_subscriber::EnvFilter;
 
@@ -44,14 +44,20 @@ fn main() -> anyhow::Result<()> {
                 let stream = indexer.streamer();
                 let view_client = indexer.client_actors().0;
 
+                let stats: Arc<Mutex<Stats>> = Arc::new(Mutex::new(Stats::new()));
                 if nes_config.stats_enabled {
-                    let stats: Arc<Mutex<Stats>> = Arc::new(Mutex::new(Stats::new()));
                     actix::spawn(stats_logger(Arc::clone(&stats), view_client.clone()));
                 }
 
-                listen_blocks(stream, args.concurrency, nes_config, view_client.clone())
-                    .await
-                    .expect("Exitting...");
+                listen_blocks(
+                    stream,
+                    args.concurrency,
+                    nes_config,
+                    view_client.clone(),
+                    stats.clone(),
+                )
+                .await
+                .expect("Exitting...");
 
                 actix::System::current().stop();
             });
@@ -107,6 +113,7 @@ async fn listen_blocks(
     concurrency: std::num::NonZeroU16,
     nes_config: NesConfig,
     view_client: actix::Addr<near_client::ViewClientActor>,
+    stats: Arc<Mutex<Stats>>,
 ) -> anyhow::Result<()> {
     let producer: FutureProducer = nes_config.kafka_config.create()?;
     let consumer: StreamConsumer = nes_config.kafka_config.create()?;
@@ -121,6 +128,7 @@ async fn listen_blocks(
                 &admin_client,
                 &view_client,
                 &nes_config,
+                stats.clone(),
             )
         })
         .buffer_unordered(usize::from(concurrency.get()));
@@ -139,7 +147,11 @@ async fn handle_message(
     admin_client: &AdminClient<DefaultClientContext>,
     view_client: &actix::Addr<near_client::ViewClientActor>,
     nes_config: &NesConfig,
+    stats: Arc<Mutex<Stats>>,
 ) -> anyhow::Result<()> {
+    let block_height = streamer_message.block.header.height;
+    start_process_block(&stats, block_height).await;
+
     store_events(
         &streamer_message,
         producer,
@@ -149,6 +161,8 @@ async fn handle_message(
         nes_config,
     )
     .await?;
+
+    end_process_block(&stats, block_height).await;
 
     Ok(())
 }

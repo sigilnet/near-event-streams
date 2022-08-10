@@ -53,7 +53,7 @@ pub async fn stats_logger(
 
         tracing::info!(
             target: crate::INDEXER,
-            "# {} | Blocks processing: {}| Blocks done: {}. Bps {:.2} b/s {}",
+            "# {} | Blocks processing: {} | Blocks done: {}. Bps {:.2} b/s {}",
             stats_copy.last_processed_block_height,
             stats_copy.block_heights_processing.len(),
             stats_copy.blocks_processed_count,
@@ -71,7 +71,7 @@ pub async fn stats_logger(
     }
 }
 
-pub(crate) async fn fetch_latest_block(
+pub async fn fetch_latest_block(
     client: &actix::Addr<near_client::ViewClientActor>,
 ) -> anyhow::Result<u64> {
     let block = client
@@ -80,4 +80,18 @@ pub(crate) async fn fetch_latest_block(
         )))
         .await??;
     Ok(block.header.height)
+}
+
+pub async fn start_process_block(stats: &Arc<Mutex<Stats>>, block_height: u64) {
+    let mut stats_lock = stats.lock().await;
+    stats_lock.block_heights_processing.insert(block_height);
+    drop(stats_lock);
+}
+
+pub async fn end_process_block(stats: &Arc<Mutex<Stats>>, block_height: u64) {
+    let mut stats_lock = stats.lock().await;
+    stats_lock.block_heights_processing.remove(&block_height);
+    stats_lock.blocks_processed_count += 1;
+    stats_lock.last_processed_block_height = block_height;
+    drop(stats_lock);
 }
