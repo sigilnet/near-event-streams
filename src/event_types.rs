@@ -1,5 +1,7 @@
 use serde::{Deserialize, Serialize};
 
+use crate::token::TokenMetadata;
+
 #[derive(Serialize, Deserialize, Debug, Clone)]
 #[serde(rename_all = "snake_case")]
 pub struct NearEvent {
@@ -24,6 +26,31 @@ impl NearEvent {
 
     pub fn to_topic(&self, prefix: &str) -> String {
         format!("{}.{}", prefix, &self.default_key())
+    }
+
+    pub fn try_flatten_nep171_event(&self) -> Vec<NearEvent> {
+        match &self.data {
+            EventData::Nep171(data) => match data {
+                Nep171Data::Mint(data) => data
+                    .iter()
+                    .map(|d| {
+                        let mut flat_event = self.clone();
+                        flat_event.data = EventData::Nep171(Nep171Data::MintFlat(d.clone()));
+                        flat_event
+                    })
+                    .collect(),
+                Nep171Data::Transfer(data) => data
+                    .iter()
+                    .map(|d| {
+                        let mut flat_event = self.clone();
+                        flat_event.data = EventData::Nep171(Nep171Data::TransferFlat(d.clone()));
+                        flat_event
+                    })
+                    .collect(),
+                _ => vec![],
+            },
+            EventData::Generic(_) => vec![],
+        }
     }
 }
 
@@ -58,6 +85,8 @@ pub struct Nep171MintData {
     pub owner_id: String,
     pub token_ids: Vec<String>,
     pub memo: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadatas: Option<Vec<Option<TokenMetadata>>>,
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -67,6 +96,8 @@ pub struct Nep171TransferData {
     pub new_owner_id: String,
     pub token_ids: Vec<String>,
     pub memo: Option<String>,
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub metadatas: Option<Vec<Option<TokenMetadata>>>,
 }
 
 #[cfg(test)]
@@ -77,35 +108,7 @@ mod tests {
     fn deserialized() {
         let json = r#"{"standard":"nep171","version":"1.0.0","event":"nft_mint","data":[{"owner_id":"sigilnet.testnet","token_ids":["1:1", "1:2"]}]}"#;
         let event: NearEvent = serde_json::from_str(json).unwrap();
-        let flat_events = match &event.data {
-            EventData::Nep171(data) => match data {
-                Nep171Data::Mint(data) => {
-                    let flat_events: Vec<NearEvent> = data
-                        .iter()
-                        .map(|d| {
-                            let mut flat_event = event.clone();
-                            flat_event.data = EventData::Nep171(Nep171Data::MintFlat(d.clone()));
-                            flat_event
-                        })
-                        .collect();
-                    flat_events
-                }
-                Nep171Data::Transfer(data) => {
-                    let flat_events: Vec<NearEvent> = data
-                        .iter()
-                        .map(|d| {
-                            let mut flat_event = event.clone();
-                            flat_event.data =
-                                EventData::Nep171(Nep171Data::TransferFlat(d.clone()));
-                            flat_event
-                        })
-                        .collect();
-                    flat_events
-                }
-                _ => vec![event],
-            },
-            EventData::Generic(_) => vec![event],
-        };
+        let flat_events = event.try_flatten_nep171_event();
         println!("flatten events: {:?}", &flat_events);
     }
 }

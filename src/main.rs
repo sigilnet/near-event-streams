@@ -46,10 +46,10 @@ fn main() -> anyhow::Result<()> {
 
                 if nes_config.stats_enabled {
                     let stats: Arc<Mutex<Stats>> = Arc::new(Mutex::new(Stats::new()));
-                    actix::spawn(stats_logger(Arc::clone(&stats), view_client));
+                    actix::spawn(stats_logger(Arc::clone(&stats), view_client.clone()));
                 }
 
-                listen_blocks(stream, args.concurrency, nes_config)
+                listen_blocks(stream, args.concurrency, nes_config, view_client.clone())
                     .await
                     .expect("Exitting...");
 
@@ -106,6 +106,7 @@ async fn listen_blocks(
     stream: tokio::sync::mpsc::Receiver<near_indexer::StreamerMessage>,
     concurrency: std::num::NonZeroU16,
     nes_config: NesConfig,
+    view_client: actix::Addr<near_client::ViewClientActor>,
 ) -> anyhow::Result<()> {
     let producer: FutureProducer = nes_config.kafka_config.create()?;
     let consumer: StreamConsumer = nes_config.kafka_config.create()?;
@@ -118,6 +119,7 @@ async fn listen_blocks(
                 &producer,
                 &consumer,
                 &admin_client,
+                &view_client,
                 &nes_config,
             )
         })
@@ -135,6 +137,7 @@ async fn handle_message(
     producer: &FutureProducer,
     consumer: &StreamConsumer,
     admin_client: &AdminClient<DefaultClientContext>,
+    view_client: &actix::Addr<near_client::ViewClientActor>,
     nes_config: &NesConfig,
 ) -> anyhow::Result<()> {
     store_events(
@@ -142,6 +145,7 @@ async fn handle_message(
         producer,
         consumer,
         admin_client,
+        view_client,
         nes_config,
     )
     .await?;

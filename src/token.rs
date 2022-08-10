@@ -1,3 +1,4 @@
+use futures::{stream::FuturesOrdered, TryStreamExt};
 use near_indexer::near_primitives::{
     types::{BlockReference, Finality, FunctionArgs},
     views::{QueryRequest, QueryResponseKind},
@@ -63,7 +64,6 @@ pub struct TokenMetadata {
     pub collection_id: Option<String>,
 }
 
-#[allow(dead_code)]
 pub async fn get_nft_token(
     client: &actix::Addr<near_client::ViewClientActor>,
     contract_id: &str,
@@ -111,4 +111,25 @@ pub async fn get_nft_token(
             Ok(None)
         }
     }
+}
+
+pub async fn get_metadatas(
+    client: &actix::Addr<near_client::ViewClientActor>,
+    contract_account_id: &str,
+    token_ids: &[String],
+) -> anyhow::Result<Vec<Option<TokenMetadata>>> {
+    let metadatas: Vec<Option<TokenMetadata>> = token_ids
+        .iter()
+        .map(|token_id| get_nft_token(client, contract_account_id, token_id))
+        .collect::<FuturesOrdered<_>>()
+        .try_collect::<Vec<Option<Token>>>()
+        .await?
+        .iter()
+        .map(|token| match token {
+            Some(token) => token.metadata.clone(),
+            None => None,
+        })
+        .collect();
+
+    Ok(metadatas)
 }

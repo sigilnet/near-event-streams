@@ -1,6 +1,9 @@
 use std::time::Duration;
 
-use futures::{stream::FuturesOrdered, TryStreamExt};
+use futures::{
+    stream::{self, FuturesOrdered},
+    StreamExt, TryStreamExt,
+};
 use rdkafka::{
     admin::{AdminClient, AdminOptions, NewTopic, TopicReplication},
     client::DefaultClientContext,
@@ -11,7 +14,8 @@ use tracing::{debug, info, warn};
 
 use crate::{
     configs::NesConfig,
-    event_types::{EmitInfo, NearEvent},
+    event_types::{EmitInfo, EventData, NearEvent, Nep171Data},
+    token::get_metadatas,
 };
 
 pub async fn ensure_topic(
@@ -73,14 +77,16 @@ pub async fn send_event(
     admin_client: &AdminClient<DefaultClientContext>,
     nes_config: &NesConfig,
     topic: &str,
-    key: &str,
-    payload: &str,
+    event: &NearEvent,
 ) -> anyhow::Result<()> {
     ensure_topic(consumer, admin_client, nes_config, topic).await?;
 
+    let payload = serde_json::to_string(event)?;
+    let key = event.to_key();
+
     let delivery_status = producer
         .send(
-            FutureRecord::to(topic).payload(payload).key(key),
+            FutureRecord::to(topic).payload(&payload).key(&key),
             Duration::from_secs(0),
         )
         .await;
@@ -96,6 +102,7 @@ pub async fn store_events(
     producer: &FutureProducer,
     consumer: &StreamConsumer,
     admin_client: &AdminClient<DefaultClientContext>,
+    view_client: &actix::Addr<near_client::ViewClientActor>,
     nes_config: &NesConfig,
 ) -> anyhow::Result<()> {
     let block_height = streamer_message.block.header.height;
@@ -103,46 +110,118 @@ pub async fn store_events(
 
     debug!(target: crate::INDEXER, "Block height {}", &block_height);
 
-    let generic_events = streamer_message
+    let events = streamer_message
         .shards
         .iter()
         .flat_map(|shard| collect_events(shard, block_height, block_timestamp, nes_config))
         .collect::<Vec<NearEvent>>();
 
     //TODO: transform to stream
-    for generic_event in generic_events.iter() {
-        let event_payload = serde_json::to_string(&generic_event)?;
-        let event_topic = generic_event.to_topic(&nes_config.near_events_topic_prefix);
-        let event_key = generic_event.to_key();
+    for event in events.iter() {
+        let event_topic = event.to_topic(&nes_config.near_events_topic_prefix);
 
-        let sender1 = send_event(
+        let sending_to_all_topic = send_event(
             producer,
             consumer,
             admin_client,
             nes_config,
             &nes_config.near_events_all_topic,
-            &event_key,
-            &event_payload,
+            event,
         );
 
-        let sender2 = send_event(
+        let sending_to_specific_topic = send_event(
             producer,
             consumer,
             admin_client,
             nes_config,
             &event_topic,
-            &event_key,
-            &event_payload,
+            event,
         );
 
-        FuturesOrdered::from_iter(vec![sender1, sender2])
-            .try_collect::<Vec<()>>()
-            .await?;
+        let sending_event_with_metadata = send_event_with_metadata(
+            producer,
+            consumer,
+            admin_client,
+            nes_config,
+            view_client,
+            &event_topic,
+            event,
+        );
 
-        info!("Sent event {} to Kafka success", &event_payload);
+        tokio::try_join!(
+            sending_to_all_topic,
+            sending_to_specific_topic,
+            sending_event_with_metadata
+        )?;
+
+        info!("Sent event {:?} to Kafka success", &event);
     }
 
     Ok(())
+}
+
+async fn send_event_with_metadata(
+    producer: &FutureProducer,
+    consumer: &StreamConsumer,
+    admin_client: &AdminClient<DefaultClientContext>,
+    nes_config: &NesConfig,
+    view_client: &actix::Addr<near_client::ViewClientActor>,
+    event_topic: &str,
+    event: &NearEvent,
+) -> anyhow::Result<()> {
+    if !nes_config.enrich_metadata {
+        return Ok(());
+    }
+
+    let contract_account_id = event.emit_info.clone().map(|info| info.contract_account_id);
+    if contract_account_id.is_none() {
+        return Ok(());
+    }
+    let contract_account_id = contract_account_id.unwrap();
+    let topic = format!("{}_metadata", event_topic);
+
+    let events = stream::iter(event.try_flatten_nep171_event());
+
+    let enriched_events = events
+        .then(|event| enrich_event_metadata(view_client, event, &contract_account_id))
+        .try_collect::<Vec<NearEvent>>()
+        .await?;
+
+    enriched_events
+        .iter()
+        .map(|event| send_event(producer, consumer, admin_client, nes_config, &topic, event))
+        .collect::<FuturesOrdered<_>>()
+        .try_collect::<Vec<()>>()
+        .await?;
+
+    Ok(())
+}
+
+async fn enrich_event_metadata(
+    view_client: &actix::Addr<near_client::ViewClientActor>,
+    event: NearEvent,
+    contract_account_id: &str,
+) -> anyhow::Result<NearEvent> {
+    let mut enriched_data = event.data.clone();
+    match enriched_data {
+        EventData::Nep171(Nep171Data::MintFlat(ref mut data)) => {
+            let metadatas =
+                get_metadatas(view_client, contract_account_id, &data.token_ids).await?;
+
+            data.metadatas = Some(metadatas);
+        }
+        EventData::Nep171(Nep171Data::TransferFlat(ref mut data)) => {
+            let metadatas =
+                get_metadatas(view_client, contract_account_id, &data.token_ids).await?;
+
+            data.metadatas = Some(metadatas);
+        }
+        _ => {}
+    }
+
+    let mut enriched_event = event.clone();
+    enriched_event.data = enriched_data;
+    Ok(enriched_event)
 }
 
 fn collect_events(
