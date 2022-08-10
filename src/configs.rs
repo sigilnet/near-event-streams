@@ -161,6 +161,7 @@ pub struct NesConfig {
     pub force_create_new_topic: bool,
     pub blacklist_contract_ids: Vec<String>,
     pub stats_enabled: bool,
+    pub enrich_metadata: bool,
 }
 
 impl NesConfig {

@@ -1,5 +1,6 @@
 use std::time::Duration;
 
+use futures::{stream::FuturesOrdered, TryStreamExt};
 use rdkafka::{
     admin::{AdminClient, AdminOptions, NewTopic, TopicReplication},
     client::DefaultClientContext,
@@ -105,7 +106,55 @@ pub async fn store_events(
     let generic_events = streamer_message
         .shards
         .iter()
-        .flat_map(|shard| collect_events(shard, block_height, block_timestamp))
+        .flat_map(|shard| collect_events(shard, block_height, block_timestamp, nes_config))
+        .collect::<Vec<NearEvent>>();
+
+    //TODO: transform to stream
+    for generic_event in generic_events.iter() {
+        let event_payload = serde_json::to_string(&generic_event)?;
+        let event_topic = generic_event.to_topic(&nes_config.near_events_topic_prefix);
+        let event_key = generic_event.to_key();
+
+        let sender1 = send_event(
+            producer,
+            consumer,
+            admin_client,
+            nes_config,
+            &nes_config.near_events_all_topic,
+            &event_key,
+            &event_payload,
+        );
+
+        let sender2 = send_event(
+            producer,
+            consumer,
+            admin_client,
+            nes_config,
+            &event_topic,
+            &event_key,
+            &event_payload,
+        );
+
+        FuturesOrdered::from_iter(vec![sender1, sender2])
+            .try_collect::<Vec<()>>()
+            .await?;
+
+        info!("Sent event {} to Kafka success", &event_payload);
+    }
+
+    Ok(())
+}
+
+fn collect_events(
+    shard: &near_indexer::IndexerShard,
+    block_height: u64,
+    block_timestamp: u64,
+    nes_config: &NesConfig,
+) -> Vec<NearEvent> {
+    shard
+        .receipt_execution_outcomes
+        .iter()
+        .flat_map(|outcome| extract_events(outcome, block_height, block_timestamp, shard.shard_id))
         .filter(|e| {
             if nes_config.whitelist_contract_ids.is_empty() {
                 return true;
@@ -124,50 +173,6 @@ pub async fn store_events(
                 .blacklist_contract_ids
                 .contains(&emit_info.contract_account_id)
         })
-        .collect::<Vec<NearEvent>>();
-
-    for generic_event in generic_events.iter() {
-        let event_payload = serde_json::to_string(&generic_event)?;
-        let event_topic = generic_event.to_topic(&nes_config.near_events_topic_prefix);
-        let event_key = generic_event.to_key();
-
-        send_event(
-            producer,
-            consumer,
-            admin_client,
-            nes_config,
-            &nes_config.near_events_all_topic,
-            &event_key,
-            &event_payload,
-        )
-        .await?;
-
-        send_event(
-            producer,
-            consumer,
-            admin_client,
-            nes_config,
-            &event_topic,
-            &event_key,
-            &event_payload,
-        )
-        .await?;
-
-        info!("Sent event {} to Kafka success", &event_payload);
-    }
-
-    Ok(())
-}
-
-fn collect_events(
-    shard: &near_indexer::IndexerShard,
-    block_height: u64,
-    block_timestamp: u64,
-) -> Vec<NearEvent> {
-    shard
-        .receipt_execution_outcomes
-        .iter()
-        .flat_map(|outcome| extract_events(outcome, block_height, block_timestamp, shard.shard_id))
         .collect::<Vec<NearEvent>>()
 }
 
