@@ -10,7 +10,7 @@ use tracing::{debug, info, warn};
 
 use crate::{
     configs::NesConfig,
-    event_types::{EmitInfo, GenericEvent},
+    event_types::{EmitInfo, NearEvent},
 };
 
 pub async fn ensure_topic(
@@ -124,7 +124,7 @@ pub async fn store_events(
                 .blacklist_contract_ids
                 .contains(&emit_info.contract_account_id)
         })
-        .collect::<Vec<GenericEvent>>();
+        .collect::<Vec<NearEvent>>();
 
     for generic_event in generic_events.iter() {
         let event_payload = serde_json::to_string(&generic_event)?;
@@ -163,12 +163,12 @@ fn collect_events(
     shard: &near_indexer::IndexerShard,
     block_height: u64,
     block_timestamp: u64,
-) -> Vec<GenericEvent> {
+) -> Vec<NearEvent> {
     shard
         .receipt_execution_outcomes
         .iter()
         .flat_map(|outcome| extract_events(outcome, block_height, block_timestamp, shard.shard_id))
-        .collect::<Vec<GenericEvent>>()
+        .collect::<Vec<NearEvent>>()
 }
 
 fn extract_events(
@@ -176,7 +176,7 @@ fn extract_events(
     block_height: u64,
     block_timestamp: u64,
     shard_id: u64,
-) -> Vec<GenericEvent> {
+) -> Vec<NearEvent> {
     let prefix = "EVENT_JSON:";
     let emit_info = EmitInfo {
         block_timestamp,
@@ -192,7 +192,7 @@ fn extract_events(
             return None;
         }
 
-        match serde_json::from_str::<'_, GenericEvent>(
+        match serde_json::from_str::<'_, NearEvent>(
             log[prefix.len()..].trim(),
         ) {
             Ok(result) => Some(result),
