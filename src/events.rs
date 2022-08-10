@@ -116,7 +116,10 @@ pub async fn store_events(
         .flat_map(|shard| collect_events(shard, block_height, block_timestamp, nes_config))
         .collect::<Vec<NearEvent>>();
 
-    //TODO: transform to stream
+    // TODO: improve throughput:
+    // 1. event partitioning by contract_account_id
+    // 2. use tokio::spawn to send each partition via different tasks
+
     for event in events.iter() {
         let event_topic = event.to_topic(&nes_config.near_events_topic_prefix);
 
