@@ -1,12 +1,22 @@
+use lazy_static::lazy_static;
+use regex::Regex;
 use serde::{Deserialize, Serialize};
+use validator::Validate;
 
 use crate::token::TokenMetadata;
 
-#[derive(Serialize, Deserialize, Debug, Clone)]
+lazy_static! {
+    static ref REGEX_STANDARD: Regex = Regex::new(r"^[a-zA-Z0-9._-]+$").unwrap();
+    static ref REGEX_EVENT: Regex = Regex::new(r"^[a-zA-Z0-9._-]+$").unwrap();
+}
+
+#[derive(Serialize, Deserialize, Debug, Clone, Validate)]
 #[serde(rename_all = "snake_case")]
 pub struct NearEvent {
+    #[validate(regex = "REGEX_STANDARD")]
     pub standard: String,
     pub version: String,
+    #[validate(regex = "REGEX_EVENT")]
     pub event: String,
     pub data: EventData,
     pub emit_info: Option<EmitInfo>,

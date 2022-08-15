@@ -1802,6 +1802,12 @@ dependencies = [
 ]
 
 [[package]]
+name = "if_chain"
+version = "1.0.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb56e1aa765b4b4f3aadfab769793b7087bb03a4ea4920644a6d238e2df5b9ed"
+
+[[package]]
 name = "impl-codec"
 version = "0.5.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -2430,18 +2436,21 @@ dependencies = [
  "futures",
  "humantime",
  "itertools",
+ "lazy_static",
  "log",
  "near-client",
  "near-indexer",
  "near-o11y",
  "openssl-probe",
  "rdkafka",
+ "regex",
  "serde",
  "serde_json",
  "tokio",
  "tokio-stream",
  "tracing",
  "tracing-subscriber",
+ "validator 0.15.0",
 ]
 
 [[package]]
@@ -2775,7 +2784,7 @@ dependencies = [
  "serde_json",
  "strum",
  "tokio",
- "validator",
+ "validator 0.12.0",
 ]
 
 [[package]]
@@ -5055,7 +5064,39 @@ dependencies = [
  "serde_derive",
  "serde_json",
  "url",
- "validator_types",
+ "validator_types 0.12.0",
+]
+
+[[package]]
+name = "validator"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f07b0a1390e01c0fc35ebb26b28ced33c9a3808f7f9fbe94d3cc01e233bfeed5"
+dependencies = [
+ "idna",
+ "lazy_static",
+ "regex",
+ "serde",
+ "serde_derive",
+ "serde_json",
+ "url",
+ "validator_derive",
+]
+
+[[package]]
+name = "validator_derive"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ea7ed5e8cf2b6bdd64a6c4ce851da25388a89327b17b88424ceced6bd5017923"
+dependencies = [
+ "if_chain",
+ "lazy_static",
+ "proc-macro-error",
+ "proc-macro2",
+ "quote",
+ "regex",
+ "syn",
+ "validator_types 0.15.0",
 ]
 
 [[package]]
@@ -5063,6 +5104,16 @@ name = "validator_types"
 version = "0.12.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "ad9680608df133af2c1ddd5eaf1ddce91d60d61b6bc51494ef326458365a470a"
+
+[[package]]
+name = "validator_types"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d2ddf34293296847abfc1493b15c6e2f5d3cd19f57ad7d22673bf4c6278da329"
+dependencies = [
+ "proc-macro2",
+ "syn",
+]
 
 [[package]]
 name = "valuable"

@@ -12,6 +12,7 @@ use rdkafka::{
     producer::{FutureProducer, FutureRecord},
 };
 use tracing::{debug, info, warn};
+use validator::Validate;
 
 use crate::{
     configs::NesConfig,
@@ -317,7 +318,21 @@ fn extract_events(
         match serde_json::from_str::<'_, NearEvent>(
             log[prefix.len()..].trim(),
         ) {
-            Ok(result) => Some(result),
+            Ok(event) => {
+                let result = event.validate();
+                match result {
+                    Ok(_) => Some(event),
+                    Err(err) => {
+                        warn!(
+                            target: crate::INDEXER,
+                            "Validation failed. Will ignore this event. \n {:#?} \n{:#?}",
+                            err,
+                            untrimmed_log,
+                        );
+                        None
+                    }
+                }
+            },
             Err(err) => {
                 warn!(
                     target: crate::INDEXER,
